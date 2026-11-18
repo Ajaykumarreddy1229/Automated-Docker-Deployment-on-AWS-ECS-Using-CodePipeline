@@ -1,0 +1,264 @@
+# CI/CD Pipeline with GitHub, AWS CodeBuild, CodePipeline, ECR and ECS
+
+## Project Overview
+
+In this project, I implemented a CI/CD pipeline using GitHub and AWS services.
+
+The pipeline automatically builds a Docker image, pushes it to Amazon ECR, and deploys the updated application to Amazon ECS whenever code changes are pushed to GitHub.
+
+## AWS Services Used
+
+- Amazon EC2
+- Amazon Linux 2023
+- Docker
+- GitHub
+- AWS IAM
+- Amazon ECR (Elastic Container Registry)
+- Amazon ECS (Elastic Container Service)
+- AWS Fargate
+- AWS CodeBuild
+- AWS CodePipeline
+- Application Load Balancer (ALB)
+- Target Group
+- CloudWatch Logs
+
+## Architecture / Workflow
+
+Developer → GitHub → AWS CodePipeline → AWS CodeBuild → Docker Image → Amazon ECR → Amazon ECS (Fargate) → Application Load Balancer → Website
+
+## Step 1: Launch EC2 Instance
+
+- Launch an Amazon Linux 2023 EC2 instance.
+- Instance type: t3.micro.
+- Install Docker.
+
+```bash
+yum install docker -y
+
+service docker start
+
+service docker status
+
+docker images
+
+docker ps -a
+```
+
+## Step 2: Clone GitHub Repository
+
+Install Git and clone the application repository.
+
+```bash
+yum install git -y
+
+git clone https://github.com/Ajaykumarreddy1229/website.git
+
+cd website
+```
+
+## Step 3: Create Docker Image
+
+The repository already contains a Dockerfile.
+
+Dockerfile:
+
+```dockerfile
+FROM nginx:latest
+
+COPY . /usr/share/nginx/html/
+
+EXPOSE 80
+```
+
+Build the Docker image.
+
+```bash
+docker build -t website:latest .
+```
+
+Check the Docker image.
+
+```bash
+docker images
+```
+
+## Step 4: Push Docker Image to Amazon ECR
+
+1. Create a private ECR repository named `website`.
+2. Create an IAM role with the required ECR permissions.
+3. Attach the IAM role to the EC2 instance.
+
+Login to ECR:
+
+```bash
+aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com
+```
+
+Build and tag the image:
+
+```bash
+docker build -t website .
+
+docker tag website:latest <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/website:latest
+```
+
+Push the image:
+
+```bash
+docker push <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/website:latest
+```
+
+Verify the image in Amazon ECR.
+
+## Step 5: Create ECS Cluster
+
+1. Open Amazon ECS.
+2. Create a cluster.
+3. Cluster name: `websitecluster`.
+4. Select AWS Fargate.
+5. Enable monitoring if required.
+
+**Fargate:** AWS manages the underlying infrastructure.
+
+**EC2:** ECS uses EC2 instances to run containers.
+
+## Step 6: Create Task Definition
+
+Create a new task definition.
+
+Configuration:
+
+- Family: `website-task-df`
+- Launch type: Fargate
+- CPU: 0.25 vCPU
+- Memory: 0.5 GB
+- Container name: website
+- Image: Amazon ECR image URI
+- Container port: 80
+- Enable CloudWatch Logs.
+
+Create the task definition.
+
+## Step 7: Create ECS Service
+
+Create an ECS service to maintain the required number of running tasks.
+
+Configuration:
+
+- Cluster: websitecluster
+- Launch type: Fargate
+- Application type: Service
+- Service name: websiteservice
+- Desired tasks: 4
+- Networking: Select the required subnets and security group.
+- Public IP: Enabled, if required.
+- Load Balancer: Application Load Balancer.
+- Target Group: Configure the target group.
+- Health Check: Configure for the application.
+
+### Service Auto Scaling
+
+Configure ECS Service Auto Scaling:
+
+- Minimum tasks: 2
+- Maximum tasks: 6
+- Scaling metric: CPU utilization
+- Target value: 70%
+
+## Step 8: Create AWS CodeBuild Project
+
+Create a CodeBuild project.
+
+Configuration:
+
+- Project name: website
+- Source provider: GitHub
+- Repository: https://github.com/ReyazShaik/website
+- Build specification: buildspec.yml
+- Artifacts: No artifacts.
+
+Use the existing `buildspec.yml` file in the repository and update the required AWS account ID, region and ECR repository values.
+
+Create the CodeBuild project.
+
+### IAM Permissions
+
+Update the CodeBuild service role with the required permissions to:
+
+- Authenticate with Amazon ECR.
+- Push Docker images to Amazon ECR.
+- Access Secrets Manager if required.
+
+Use least-privilege IAM permissions.
+
+Start the build and check the build logs.
+
+## Step 9: Create AWS CodePipeline
+
+Create a new CodePipeline.
+
+Pipeline name: `ECS-CICD`
+
+### Source Stage
+
+- Source provider: GitHub (Version 2).
+- Connect GitHub using AWS CodeStar connection.
+- Repository: website.
+- Branch: master.
+- Trigger: Push events.
+- Branch filter: master.
+
+### Build Stage
+
+- Build provider: AWS CodeBuild.
+- Project name: website.
+- Build type: Single build.
+
+### Deploy Stage
+
+- Deploy provider: Amazon ECS.
+- Cluster: websitecluster.
+- Service: websiteservice.
+- Image definitions file: imagedefinitions.json.
+
+Create the pipeline and allow it to run.
+
+## Step 10: Test Automatic Deployment
+
+1. Open the GitHub repository.
+2. Modify the `index.html` file.
+3. Commit and push the changes to the master branch.
+4. GitHub triggers AWS CodePipeline.
+5. CodeBuild builds a new Docker image.
+6. The new image is pushed to Amazon ECR.
+7. CodePipeline deploys the updated image to Amazon ECS.
+8. ECS updates the running application.
+9. Access the website through the Application Load Balancer DNS.
+
+## Final Result
+
+Successfully implemented an automated CI/CD pipeline using GitHub and AWS services.
+
+Whenever developers push new code to GitHub, the pipeline automatically builds, stores and deploys the updated application.
+
+## Cleanup
+
+After completing the project, delete the resources to avoid unnecessary AWS charges.
+
+- Delete the CodePipeline.
+- Delete the CodeBuild project.
+- Delete the ECS service.
+- Stop and remove running ECS tasks.
+- Delete the ECS cluster.
+- Deregister unused task definition revisions.
+- Delete the Application Load Balancer.
+- Delete the Target Group.
+- Delete unused ECR images and repository.
+- Terminate the EC2 instance.
+- Remove unused IAM resources.
+
+---
+
+**Project:** Automated Docker Deployment on AWS ECS Using CodePipeline
+
+**Main Objective:** Automate Docker image building and application deployment using AWS CI/CD services.
